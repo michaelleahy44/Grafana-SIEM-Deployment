@@ -1,0 +1,19 @@
+---
+- name: Install Node Exporter
+  hosts: <HOSTS>
+  become: true
+  roles:
+    - NodeExporter
+
+- name: Install Promtail
+  hosts: <HOSTS>
+  become: true
+  roles:
+    - Promtail
+
+- name: Install Logging Tools
+  hosts: <HOSTS>
+  become: true
+  roles:
+    - Auditd
+    - Sysmon
