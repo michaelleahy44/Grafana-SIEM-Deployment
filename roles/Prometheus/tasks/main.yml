@@ -1,0 +1,71 @@
+- name: Download Prometheus
+  ansible.builtin.get_url:
+    url: https://github.com/prometheus/prometheus/releases/download/v3.11.2/prometheus-3.11.2.linux-amd64.tar.gz
+    dest: /tmp/prometheus-3.11.2.linux-amd64.tar.gz
+
+- name: Extract Prometheus to /opt
+  ansible.builtin.unarchive:
+    src: /tmp/prometheus-3.11.2.linux-amd64.tar.gz
+    dest: /opt/
+    remote_src: true
+
+- name: Create Prometheus directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /etc/prometheus
+    - /var/lib/prometheus
+
+- name: Create Prometheus config file
+  ansible.builtin.copy:
+    dest: /etc/prometheus/prometheus.yml
+    mode: '0644'
+    content: |
+        global:
+          scrape_interval: 15s
+          evaluation_interval: 15s
+
+        scrape_configs:
+          # Scrape Prometheus itself
+          - job_name: "prometheus"
+            static_configs:
+              - targets: ["localhost:9090"]
+
+          # Scrape Node Exporter
+          - job_name: "clients"
+            static_configs:
+              - targets:
+          {% for host in groups['linux'] %}
+                - "{{ hostvars[host]['ansible_host'] }}:9100"
+          {% endfor %}
+
+- name: Create Prometheus Service File
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/prometheus.service
+    mode: '0644'
+    content: |
+      [Unit]
+      Description=Prometheus Monitoring
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      Type=simple
+      ExecStart=/opt/prometheus-3.11.2.linux-amd64/prometheus \
+        --config.file=/etc/prometheus/prometheus.yml \
+        --storage.tsdb.path=/var/lib/prometheus
+
+      Restart=always
+      RestartSec=3
+
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Reload systemd and start Prometheus
+  ansible.builtin.systemd:
+    name: prometheus
+    enabled: true
+    state: started
+    daemon_reload: true

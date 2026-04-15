@@ -1,0 +1,96 @@
+- name: Install unzip
+  ansible.builtin.package:
+    name: unzip
+    state: present
+
+- name: Download Loki
+  ansible.builtin.get_url:
+    url: https://github.com/grafana/loki/releases/download/v2.9.3/loki-linux-amd64.zip
+    dest: /tmp/loki.zip
+    mode: '0644'
+
+- name: Extract Loki
+  ansible.builtin.unarchive:
+    src: /tmp/loki.zip
+    dest: /tmp/
+    remote_src: true
+
+- name: Install Loki binary
+  ansible.builtin.copy:
+    src: /tmp/loki-linux-amd64
+    dest: /usr/local/bin/loki
+    remote_src: true
+    mode: '0755'
+
+- name: Create Loki directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /etc/loki
+    - /var/lib/loki
+    - /var/lib/loki/chunks
+    - /var/lib/loki/rules
+
+- name: Create Loki config
+  ansible.builtin.copy:
+    dest: /etc/loki/loki-config.yaml
+    mode: '0644'
+    content: |
+      auth_enabled: false
+
+      server:
+        http_listen_port: 3100
+        grpc_listen_port: 9096
+
+      common:
+        instance_addr: 127.0.0.1
+        path_prefix: /var/lib/loki
+        storage:
+          filesystem:
+            chunks_directory: /var/lib/loki/chunks
+            rules_directory: /var/lib/loki/rules
+        replication_factor: 1
+        ring:
+          kvstore:
+            store: inmemory
+
+      schema_config:
+        configs:
+          - from: 2020-10-24
+            store: boltdb-shipper
+            object_store: filesystem
+            schema: v11
+            index:
+              prefix: index_
+              period: 24h
+
+      limits_config:
+        reject_old_samples: true
+        reject_old_samples_max_age: 168h
+        volume_enabled: true
+
+- name: Create Loki systemd service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/loki.service
+    mode: '0644'
+    content: |
+      [Unit]
+      Description=Loki Log Aggregation
+      After=network.target
+
+      [Service]
+      Type=simple
+      ExecStart=/usr/local/bin/loki -config.file=/etc/loki/loki-config.yaml
+      Restart=always
+
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Start and enable Loki
+  ansible.builtin.systemd:
+    name: loki
+    enabled: true
+    state: started
+    daemon_reload: true
