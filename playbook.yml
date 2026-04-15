@@ -1,4 +1,21 @@
 ---
+- name: Install Loki
+  hosts: <HOSTS>
+  become: true
+  roles:
+    - Loki
+
+- name: Install Prometheus
+  hosts: <HOSTS>
+  become: true
+  roles:
+    - Prometheus
+
+- name: Install Grafana
+  hosts: <HOSTS>
+  become: true
+  roles:
+    - Grafana
 - name: Install Node Exporter
   hosts: <HOSTS>
   become: true
